@@ -1,0 +1,21 @@
+# Environment and secrets
+.env
+
+# Local tooling
+.atl/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Project data
+.cache/
+*.sqlite3
+wiki.wiki/
+
+# OS
+.DS_Store
