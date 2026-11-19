@@ -71,13 +71,14 @@ Un servidor MCP local, instalable por cualquier socio, que permita preguntar en 
 - Estado del índice y del clon.
 - Respuestas con snippet, path relativo y URL de GitLab.
 - Comando `refresh` para `git pull --ff-only` + reconstrucción del índice.
-- Tools, resources y prompt MCP.
+- Tools MCP (solo tools).
 - Tests mínimos y CI en GitHub Actions.
 - README en inglés y documentación de conceptos MCP en español.
 
 ### 3.3 Fuera de alcance
 
 - Kimai, Gmail, Google Calendar y el protocolo de vacaciones (v0.2 y v0.3).
+- MCP resources y prompts: la v0.1 expone solo tools.
 - Síntesis con un LLM dentro del servidor.
 - Transporte HTTP remoto, OAuth o multiusuario.
 - Búsqueda en la historia de Git (solo checkout actual).
@@ -107,7 +108,7 @@ Un servidor MCP local, instalable por cualquier socio, que permita preguntar en 
           ▼
 ┌─────────────────────┐      tools/list, tools/call      ┌──────────────────┐
 │  Servidor MCP       │ ◄──────────────────────────────► │  Claude Code /   │
-│  devecoop           │      resources/read, prompts     │  OpenCode        │
+│  devecoop           │                                  │  OpenCode        │
 └─────────────────────┘                                  └──────────────────┘
 ```
 
@@ -174,14 +175,12 @@ Se verificó que el formato de URL responde `200` para páginas anidadas y con c
 | Tool | `wiki_read_page` | El modelo | JSON con contenido Markdown completo y URL |
 | Tool | `wiki_list_pages` | El modelo | JSON con paths, títulos y URLs, filtrable por prefijo |
 | Tool | `wiki_status` | El modelo o el usuario | JSON con estado del clon y del índice |
-| Resource | `wiki://page/{path}` | El host o el usuario | Markdown de la página |
-| Prompt | `ask_wiki` | El usuario | Instrucciones para buscar, leer y citar |
 
 **Quién decide qué:**
 
-- **Tools:** las elige el modelo según el pedido y las descripciones. Son el camino crítico.
-- **Resources:** los decide el host o el usuario. En Claude Code se referencian con `@devecoop:wiki://page/...`; en OpenCode el agente usa `list_mcp_resources` y `read_mcp_resource`.
-- **Prompts:** los elige el usuario. En Claude Code aparecen como `/devecoop:ask_wiki` o `/mcp__devecoop__ask_wiki`; en OpenCode como `/devecoop:ask_wiki`.
+- **Tools:** las elige el modelo según el pedido y las descripciones. Son la única superficie MCP de la v0.1.
+
+> **Nota:** los resources y prompts MCP quedaron fuera del alcance de la v0.1; el servidor expone solo tools.
 
 ### 4.6 Contratos de las tools
 
@@ -274,17 +273,7 @@ Salida:
 }
 ```
 
-### 4.7 Resource y prompt
-
-- `wiki://page/{path}` devuelve el Markdown crudo de la página. El `path` se URL-encodea. Rechaza paths fuera de la wiki.
-- `ask_wiki(topic)` devuelve un mensaje de usuario que instruye al modelo a:
-  1. buscar con `wiki_search`,
-  2. leer las páginas relevantes con `wiki_read_page`,
-  3. responder solo con información de la wiki,
-  4. citar la `url` de cada fuente,
-  5. decir explícitamente si no hay evidencia.
-
-### 4.8 Configuración
+### 4.7 Configuración
 
 Variables de entorno:
 
@@ -300,7 +289,7 @@ Variables de entorno:
 - Si falta `WIKI_PATH`, el servidor falla con un mensaje que indica qué variable configurar.
 - `.env` está en `.gitignore`; `.env.example` tiene un placeholder de path absoluto, porque cada usuario clona la wiki donde quiere.
 
-### 4.9 CLI
+### 4.8 CLI
 
 | Comando | Qué hace |
 |---|---|
@@ -313,7 +302,7 @@ Variables de entorno:
 
 El servidor no reconstruye el índice automáticamente. Si el índice no existe, falla con: `Index not found. Run 'devecoop-mcp refresh' first.`
 
-### 4.10 Arquitectura
+### 4.9 Arquitectura
 
 ```text
 src/devecoop_mcp/
@@ -327,8 +316,6 @@ src/devecoop_mcp/
   wiki/
     __init__.py
     tools.py         # wiki_search, wiki_read_page, wiki_list_pages, wiki_status
-    resources.py     # wiki://page/{path}
-    prompts.py       # ask_wiki
     search.py        # consultas FTS5 y ranking
     index.py         # build/refresh del índice y metadata
     urls.py          # derivación de URLs de GitLab
@@ -343,9 +330,9 @@ tests/
 
 Un solo servidor MCP. Cada feature futura (`kimai/`, `vacations/`) se registra desde `server.py` y reutiliza lo que necesite.
 
-### 4.11 Seguridad y privacidad
+### 4.10 Seguridad y privacidad
 
-- **Path traversal:** `wiki_read_page` y el resource resuelven la ruta y verifican que siga dentro de `WIKI_PATH`. Se rechazan paths absolutos, `..`, symlinks que escapan y archivos que no sean `.md`.
+- **Path traversal:** `wiki_read_page` resuelve la ruta y verifica que siga dentro de `WIKI_PATH`. Se rechazan paths absolutos, `..`, symlinks que escapan y archivos que no sean `.md`.
 - **Sin escritura:** el servidor no modifica la wiki ni servicios externos.
 - **Sin red en `serve`:** el servidor solo lee el filesystem y el índice.
 - **Refresh controlado:** `refresh` hace `git pull --ff-only` y reconstruye el índice en un archivo temporal, luego lo reemplaza de forma atómica.
@@ -372,11 +359,9 @@ Un solo servidor MCP. Cada feature futura (`kimai/`, `vacations/`) se registra d
 ### 5.2 Protocolo MCP
 
 - [ ] `tools/list` muestra las cuatro tools con descripciones y annotations de solo lectura.
-- [ ] `resources/list` muestra el template `wiki://page/{path}` y `resources/read` devuelve Markdown.
-- [ ] `prompts/list` muestra `ask_wiki` y su ejecución devuelve el template esperado.
 - [ ] El servidor funciona en Claude Code con `claude mcp add`.
 - [ ] El servidor funciona en OpenCode con `mcp.servers.devecoop`.
-- [ ] `mcp dev` / Inspector muestra tools, resources y prompts sin errores.
+- [ ] `mcp dev` / Inspector muestra las tools sin errores.
 
 ### 5.3 Calidad
 
@@ -534,7 +519,6 @@ claude mcp add --transport stdio \
 - [ ] Implementar configuración y carga de `.env`.
 - [ ] Implementar índice FTS5 y `refresh`.
 - [ ] Implementar `wiki_search`, `wiki_read_page`, `wiki_list_pages`, `wiki_status`.
-- [ ] Implementar resource y prompt.
 - [ ] Implementar CLI `serve`/`refresh`/`status`.
 - [ ] Tests mínimos.
 - [ ] GitHub Actions.

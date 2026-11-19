@@ -5,10 +5,9 @@ Devecoop GitLab wiki into a searchable knowledge source for AI clients. The serv
 retrieves evidence from the wiki and returns structured JSON with the page path and
 its GitLab URL, so the client can answer with verifiable citations.
 
-> **Status: v0.1 scaffold.** The project structure, configuration, CLI entry point and
-> MCP server boot are in place. Wiki search, page reading, indexing and the CLI
-> `refresh`/`status` commands are **not implemented yet**; they are tracked as
-> explicit `TODO(v0.1)` placeholders.
+> **Status: v0.1 in progress.** The index, search, page reading, page listing, the
+> status tool and the four MCP tools are implemented. The CLI `refresh`/`status`
+> commands and the formal docs are still pending.
 
 ## Overview
 
@@ -31,13 +30,12 @@ Planned for the first release:
 - Report index and clone status.
 - Results include a snippet, relative `path`, approximate `line` and GitLab `url`.
 - `devecoop-mcp refresh` to run `git pull --ff-only` and rebuild the index atomically.
-- MCP tools (`wiki_search`, `wiki_read_page`, `wiki_list_pages`, `wiki_status`),
-  a `wiki://page/{path}` resource and an `ask_wiki` prompt.
+- MCP tools (`wiki_search`, `wiki_read_page`, `wiki_list_pages`, `wiki_status`).
 - Minimal tests and GitHub Actions CI.
 
-Out of scope for v0.1: Kimai time tracking, vacation workflows, LLM synthesis inside
-the server, remote HTTP/OAuth transports, semantic search/embeddings, and any writes
-to the wiki.
+Out of scope for v0.1: Kimai time tracking, vacation workflows, MCP resources and
+prompts, LLM synthesis inside the server, remote HTTP/OAuth transports, semantic
+search/embeddings, and any writes to the wiki.
 
 ## Requirements
 
@@ -136,7 +134,7 @@ working directory.
 
 ## Usage
 
-Once the wiki feature lands, typical prompts will look like:
+Typical prompts:
 
 - "What did we decide about increasing vacation days?"
 - "How did the vote on the cleaning service go?"
@@ -144,8 +142,7 @@ Once the wiki feature lands, typical prompts will look like:
 - "List the pages under `minutas/2026`."
 
 The model uses `wiki_search` first, then `wiki_read_page` when the snippet is not
-enough, and answers with the GitLab URL of each page it cites. Prompts are available
-as `/devecoop:ask_wiki` in the clients.
+enough, and answers with the GitLab URL of each page it cites.
 
 ## Development
 
@@ -178,8 +175,6 @@ src/devecoop_mcp/
     logging.py       # stderr logging setup (stdio-safe)
   wiki/
     tools.py         # wiki_search, wiki_read_page, wiki_list_pages, wiki_status
-    resources.py     # wiki://page/{path}
-    prompts.py       # ask_wiki
     search.py        # FTS5 queries and ranking
     index.py         # index build/refresh and metadata
     urls.py          # GitLab URL derivation

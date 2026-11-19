@@ -14,6 +14,9 @@ Pendiente: estructura de requests, responses y notifications.
 
 ## Tools, resources y prompts
 
+> **Nota:** el proyecto implementa solo tools en la v0.1. Los resources y prompts MCP
+> se removieron del alcance; esta sección se mantiene como material conceptual.
+
 Pendiente: diferencias, quién elige cada primitiva y cuándo usar cada una.
 
 ## Transporte stdio
