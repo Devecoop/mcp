@@ -16,13 +16,16 @@ from devecoop_mcp.wiki.tools import register_tools
 if TYPE_CHECKING:
     from mcp.server.mcpserver import MCPServer
 
+    from devecoop_mcp.config import Settings
 
-def register_wiki(mcp: MCPServer) -> None:
+
+def register_wiki(mcp: MCPServer, settings: Settings) -> None:
     """Register all wiki primitives on the MCP server.
 
     Args:
         mcp: The Devecoop MCP server instance.
+        settings: Runtime configuration with the wiki path and index settings.
     """
-    register_tools(mcp)
+    register_tools(mcp, settings)
     register_resources(mcp)
     register_prompts(mcp)

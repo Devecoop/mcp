@@ -23,10 +23,16 @@ INSTRUCTIONS = (
 )
 
 
-def create_server() -> MCPServer:
-    """Build the Devecoop MCP server and register its features."""
+def create_server(settings: Settings | None = None) -> MCPServer:
+    """Build the Devecoop MCP server and register its features.
+
+    Args:
+        settings: Optional pre-built settings. When omitted, settings are loaded
+            from the environment and ``.env``.
+    """
+    resolved = settings if settings is not None else Settings()
     server = MCPServer(SERVER_NAME, instructions=INSTRUCTIONS, version=__version__)
-    register_wiki(server)
+    register_wiki(server, resolved)
     return server
 
 
@@ -44,7 +50,7 @@ def run_server(settings: Settings | None = None) -> None:
     resolved = settings if settings is not None else Settings()
     resolved.require_wiki_path()
     configure_logging(resolved.log_level)
-    create_server().run(transport="stdio")
+    create_server(resolved).run(transport="stdio")
 
 
 def main() -> None:

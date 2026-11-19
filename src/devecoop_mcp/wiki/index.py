@@ -43,13 +43,36 @@ class WikiPage:
     body: str
 
 
-def _extract_title(content: str, page_stem: str) -> str:
+def extract_title(content: str, page_stem: str) -> str:
     """Return the first H1 title, falling back to the humanized file stem."""
     fallback = page_stem.replace("-", " ")
     for line in content.splitlines():
         if line.startswith("# "):
             return line.removeprefix("# ").strip() or fallback
     return fallback
+
+
+def resolve_wiki_page_path(wiki_path: Path, page_path: str) -> Path:
+    """Resolve a wiki-relative Markdown path, rejecting escapes and non-Markdown files.
+
+    Args:
+        wiki_path: Path to the local wiki clone.
+        page_path: Page path relative to the wiki root, as sent by the model.
+
+    Returns:
+        The resolved path to an existing Markdown file inside the wiki clone.
+
+    Raises:
+        ValueError: If the path escapes the wiki root or is not a Markdown file.
+        FileNotFoundError: If the resolved path is not an existing file.
+    """
+    root = wiki_path.resolve()
+    candidate = (root / page_path).resolve()
+    if not candidate.is_relative_to(root) or candidate.suffix.lower() != ".md":
+        raise ValueError(f"Invalid wiki page path: {page_path}")
+    if not candidate.is_file():
+        raise FileNotFoundError(f"Wiki page not found: {page_path}")
+    return candidate
 
 
 def _read_wiki_pages(wiki_path: Path) -> list[WikiPage]:
@@ -66,7 +89,7 @@ def _read_wiki_pages(wiki_path: Path) -> list[WikiPage]:
         pages.append(
             WikiPage(
                 path=relative_path.as_posix(),
-                title=_extract_title(content, page_path.stem),
+                title=extract_title(content, page_path.stem),
                 body=content,
             )
         )

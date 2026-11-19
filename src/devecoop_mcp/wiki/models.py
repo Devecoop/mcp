@@ -1,7 +1,6 @@
-"""Pydantic models for the planned wiki tool contracts.
+"""Pydantic models for the wiki tool contracts.
 
 These models mirror the JSON contracts documented in ``docs/project-guidelines.md``.
-Search and indexing behaviour is implemented in later tasks.
 """
 
 from __future__ import annotations
@@ -49,6 +48,13 @@ class PageSummary(BaseModel):
     path: str
     title: str
     url: str | None = None
+
+
+class PageListResponse(BaseModel):
+    """Result of a ``wiki_list_pages`` call."""
+
+    pages: list[PageSummary]
+    total: int = Field(ge=0, description="Number of pages matching the prefix.")
 
 
 class StatusResponse(BaseModel):
