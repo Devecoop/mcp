@@ -19,6 +19,7 @@ def test_server_is_configured() -> None:
     assert server.name == "devecoop"
     assert server.version == "0.1.0"
     assert "GitLab URL" in (server.instructions or "")
+    assert "untrusted data" in (server.instructions or "").lower()
 
 
 def test_cli_version(capsys: pytest.CaptureFixture[str]) -> None:

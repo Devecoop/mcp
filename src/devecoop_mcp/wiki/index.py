@@ -91,6 +91,15 @@ def _write_index(temp_path: Path, pages: list[WikiPage], metadata: dict[str, str
         connection.close()
 
 
+def open_index_read_only(index_path: Path) -> sqlite3.Connection:
+    """Open an existing index in read-only mode."""
+    if not index_path.is_file():
+        raise FileNotFoundError(
+            f"Index not found at {index_path}. Run 'devecoop-mcp refresh' first."
+        )
+    return sqlite3.connect(f"file:{index_path}?mode=ro", uri=True)
+
+
 def build_index(*, wiki_path: Path, index_path: Path) -> StatusResponse:
     """Build a new index at ``index_path`` from the wiki clone.
 
@@ -135,12 +144,7 @@ def read_status(*, wiki_path: Path, index_path: Path) -> StatusResponse:
     Returns:
         Current page count, git commit, remote and last indexing timestamp.
     """
-    if not index_path.is_file():
-        raise FileNotFoundError(
-            f"Index not found at {index_path}. Run 'devecoop-mcp refresh' first."
-        )
-
-    connection = sqlite3.connect(f"file:{index_path}?mode=ro", uri=True)
+    connection = open_index_read_only(index_path)
     try:
         metadata: dict[str, str] = dict(connection.execute("SELECT key, value FROM metadata"))
     finally:
