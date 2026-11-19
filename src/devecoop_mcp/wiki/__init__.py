@@ -27,5 +27,5 @@ def register_wiki(mcp: MCPServer, settings: Settings) -> None:
         settings: Runtime configuration with the wiki path and index settings.
     """
     register_tools(mcp, settings)
-    register_resources(mcp)
+    register_resources(mcp, settings)
     register_prompts(mcp)
