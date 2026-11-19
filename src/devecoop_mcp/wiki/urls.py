@@ -7,9 +7,10 @@ lowercase.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from urllib.parse import quote
+
+from devecoop_mcp.core.git import read_git_output
 
 WIKI_PATH_SUFFIX = "/-/wikis"
 
@@ -50,20 +51,10 @@ def derive_base_url(wiki_path: Path) -> str | None:
         The wiki base URL, or ``None`` when git fails or the remote is not
         recognized.
     """
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(wiki_path), "remote", "get-url", "origin"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
+    remote = read_git_output(wiki_path, "remote", "get-url", "origin")
+    if remote is None:
         return None
-
-    if result.returncode != 0:
-        return None
-    return parse_remote_url(result.stdout)
+    return parse_remote_url(remote)
 
 
 def page_path_to_slug(page_path: str) -> str:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,11 +25,12 @@ def test_derive_base_url_reads_origin(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        assert command == ["git", "-C", str(tmp_path), "remote", "get-url", "origin"]
-        return subprocess.CompletedProcess(command, 0, stdout=DEVECOOP_REMOTE, stderr="")
+    def fake_read_git_output(wiki_path: Path, *arguments: str) -> str | None:
+        assert wiki_path == tmp_path
+        assert arguments == ("remote", "get-url", "origin")
+        return DEVECOOP_REMOTE
 
-    monkeypatch.setattr(urls.subprocess, "run", fake_run)
+    monkeypatch.setattr(urls, "read_git_output", fake_read_git_output)
 
     assert urls.derive_base_url(tmp_path) == DEVECOOP_BASE
 
@@ -39,10 +39,10 @@ def test_derive_base_url_returns_none_on_git_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(command, 128, stdout="", stderr="fatal")
+    def fake_read_git_output(wiki_path: Path, *arguments: str) -> str | None:
+        return None
 
-    monkeypatch.setattr(urls.subprocess, "run", fake_run)
+    monkeypatch.setattr(urls, "read_git_output", fake_read_git_output)
 
     assert urls.derive_base_url(tmp_path) is None
 
