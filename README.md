@@ -6,8 +6,8 @@ retrieves evidence from the wiki and returns structured JSON with the page path 
 its GitLab URL, so the client can answer with verifiable citations.
 
 > **Status: v0.1 in progress.** The index, search, page reading, page listing, the
-> status tool and the four MCP tools are implemented. The CLI `refresh`/`status`
-> commands and the formal docs are still pending.
+> status tool, the four MCP tools and the CLI `refresh`/`status` commands are
+> implemented. The formal docs are still pending.
 
 ## Overview
 
@@ -94,9 +94,19 @@ truth.
 uv run devecoop-mcp refresh
 ```
 
-This command is **not implemented in the current scaffold**: it prints a placeholder
-message and exits with a non-zero code. Once implemented, it will be the only command
-that touches the network or writes files.
+`refresh` is the only command that touches the network or writes files. It runs
+`git pull --ff-only` in the wiki clone and then rebuilds the index atomically. If the
+pull fails, for example because of local changes, the command aborts and leaves the
+existing index untouched.
+
+## Check status
+
+```bash
+uv run devecoop-mcp status
+```
+
+This prints the wiki path, index path, page count, last indexing time, git commit and
+git remote.
 
 ## Register the server
 

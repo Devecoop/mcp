@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from devecoop_mcp import __version__
+from devecoop_mcp.config import Settings
 from devecoop_mcp.core.errors import ConfigurationError
+from devecoop_mcp.core.git import read_git_output
 from devecoop_mcp.server import run_server
-
-NOT_IMPLEMENTED_EXIT_CODE = 3
+from devecoop_mcp.wiki.index import build_index, read_status
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,14 +40,64 @@ def _serve() -> int:
     return 0
 
 
-def _placeholder(command: str) -> int:
-    """Report that ``command`` is not part of the scaffold yet."""
-    print(
-        f"error: '{command}' is not implemented yet. "
-        "This is the v0.1 scaffold; see docs/project-guidelines.md.",
-        file=sys.stderr,
-    )
-    return NOT_IMPLEMENTED_EXIT_CODE
+def _resolve_wiki_paths() -> tuple[Path, Path] | None:
+    """Return the wiki and index paths, or report a configuration error."""
+    try:
+        settings = Settings()
+        return settings.require_wiki_path(), settings.wiki_index_path
+    except (ConfigurationError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
+
+
+def _refresh() -> int:
+    """Pull the wiki clone and rebuild the index."""
+    paths = _resolve_wiki_paths()
+    if paths is None:
+        return 2
+    wiki_path, index_path = paths
+
+    pull_output = read_git_output(wiki_path, "pull", "--ff-only", timeout=60)
+    if pull_output is None:
+        print(f"error: git pull --ff-only failed in {wiki_path}", file=sys.stderr)
+        return 1
+    if pull_output:
+        print(pull_output)
+
+    try:
+        status = build_index(wiki_path=wiki_path, index_path=index_path)
+    except (FileNotFoundError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Indexed {status.page_count} pages into {status.index_path}")
+    if status.git_commit:
+        print(f"Wiki commit: {status.git_commit}")
+    if status.last_indexed_at:
+        print(f"Last indexed: {status.last_indexed_at}")
+    return 0
+
+
+def _status() -> int:
+    """Print the current wiki clone and index status."""
+    paths = _resolve_wiki_paths()
+    if paths is None:
+        return 2
+    wiki_path, index_path = paths
+
+    try:
+        status = read_status(wiki_path=wiki_path, index_path=index_path)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Wiki path: {status.wiki_path}")
+    print(f"Index path: {status.index_path}")
+    print(f"Pages: {status.page_count}")
+    print(f"Last indexed: {status.last_indexed_at or 'never'}")
+    print(f"Git commit: {status.git_commit or 'unknown'}")
+    print(f"Git remote: {status.git_remote or 'unknown'}")
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -63,8 +115,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command in (None, "serve"):
         return _serve()
     if args.command == "refresh":
-        return _placeholder("refresh")
+        return _refresh()
     if args.command == "status":
-        return _placeholder("status")
+        return _status()
 
     parser.error(f"unknown command: {args.command}")
