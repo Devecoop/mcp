@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 import devecoop_mcp
 from devecoop_mcp.cli import main
+from devecoop_mcp.config import Settings
 from devecoop_mcp.server import create_server
 
 
@@ -14,7 +17,7 @@ def test_package_exposes_version() -> None:
 
 
 def test_server_is_configured() -> None:
-    server = create_server()
+    server = create_server(Settings(_env_file=None, wiki_path=Path("/tmp/wiki")))
 
     assert server.name == "devecoop"
     assert server.version == "0.1.0"
