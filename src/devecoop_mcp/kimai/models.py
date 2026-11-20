@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -25,6 +27,18 @@ class KimaiUserSummary(BaseModel):
     timezone: str | None = Field(default=None, description="User timezone.")
     enabled: bool | None = Field(default=None, description="Whether the user is enabled.")
     roles: list[str] = Field(default_factory=list, description="Kimai role names.")
+
+
+def kimai_user_summary(payload: dict[str, Any]) -> KimaiUserSummary:
+    """Map a Kimai user entity to the tool output model."""
+    return KimaiUserSummary(
+        id=int(payload["id"]),
+        username=str(payload["username"]),
+        alias=payload.get("alias"),
+        timezone=payload.get("timezone"),
+        enabled=payload.get("enabled"),
+        roles=payload.get("roles") or [],
+    )
 
 
 class KimaiTimesheetConfigSummary(BaseModel):
@@ -90,3 +104,85 @@ class KimaiTimesheetListResponse(BaseModel):
         description="Sum of the returned entry durations in minutes."
     )
     truncated: bool = Field(description="Whether the result reached the requested limit.")
+
+
+class KimaiTimesheetDraft(BaseModel):
+    """Input model for one timesheet entry to preview or create."""
+
+    date: str = Field(description="Entry date in YYYY-MM-DD format.")
+    begin: str | None = Field(
+        default=None,
+        description=(
+            "Begin time in 24-hour HH:MM format; defaults to KIMAI_DEFAULT_BEGIN_TIME when omitted."
+        ),
+    )
+    end: str | None = Field(
+        default=None,
+        description="End time in 24-hour HH:MM format. Provide either end or duration_minutes.",
+    )
+    duration_minutes: int | None = Field(
+        default=None,
+        description="Positive duration in minutes. Provide either end or duration_minutes.",
+    )
+
+
+class KimaiPreviewEntry(BaseModel):
+    """One normalized entry in a timesheet preview."""
+
+    date: str = Field(description="Entry date in YYYY-MM-DD format.")
+    begin: str = Field(description="Local begin datetime in YYYY-MM-DDTHH:MM:SS format.")
+    end: str = Field(description="Local end datetime in YYYY-MM-DDTHH:MM:SS format.")
+    duration_minutes: int = Field(description="Duration in minutes.")
+
+
+class KimaiTimesheetPreviewResponse(BaseModel):
+    """Result of a ``kimai_preview_timesheets`` call. No entries were written."""
+
+    user: KimaiUserSummary = Field(description="Configured target user.")
+    project_id: int = Field(description="Kimai project ID.")
+    project_name: str = Field(description="Kimai project name.")
+    activity_id: int = Field(description="Kimai activity ID.")
+    activity_name: str = Field(description="Kimai activity name.")
+    description: str | None = Field(default=None, description="Timesheet description.")
+    entries: list[KimaiPreviewEntry] = Field(description="Normalized entries in begin order.")
+    total_duration_minutes: int = Field(description="Sum of all entry durations in minutes.")
+    summary: str = Field(description="Human-readable confirmation message.")
+    confirmation_token: str = Field(description="Signed token required by kimai_log_timesheets.")
+    expires_at: str = Field(description="Token expiry as an ISO 8601 UTC timestamp.")
+
+
+class KimaiWrittenEntry(BaseModel):
+    """A timesheet entry created by ``kimai_log_timesheets``."""
+
+    id: int = Field(description="Kimai internal timesheet ID.")
+    begin: str = Field(description="Begin timestamp returned by Kimai, including its offset.")
+    end: str = Field(description="End timestamp returned by Kimai, including its offset.")
+    duration_minutes: int = Field(description="Duration in minutes, rounded from API seconds.")
+    project_name: str = Field(description="Kimai project name.")
+    activity_name: str = Field(description="Kimai activity name.")
+    description: str | None = Field(default=None, description="Timesheet description.")
+
+
+class KimaiPendingEntry(BaseModel):
+    """A timesheet entry that was not confirmed as written."""
+
+    begin: str = Field(description="Local begin datetime in YYYY-MM-DDTHH:MM:SS format.")
+    end: str = Field(description="Local end datetime in YYYY-MM-DDTHH:MM:SS format.")
+    duration_minutes: int = Field(description="Duration in minutes.")
+
+
+class KimaiTimesheetLogResponse(BaseModel):
+    """Result of a ``kimai_log_timesheets`` call."""
+
+    status: Literal["ok", "partial", "failed"] = Field(
+        description="Overall outcome: ok, partial or failed."
+    )
+    written: list[KimaiWrittenEntry] = Field(description="Entries confirmed as written.")
+    failed_entry: KimaiPendingEntry | None = Field(
+        default=None,
+        description="Entry whose write failed or whose outcome is unknown.",
+    )
+    pending: list[KimaiPendingEntry] = Field(
+        description="Entries after the failed entry that were not attempted."
+    )
+    error: str | None = Field(default=None, description="Failure explanation, when applicable.")

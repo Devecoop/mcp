@@ -1,6 +1,7 @@
 """MCP tools for the Kimai integration.
 
-The read-only ``kimai_status`` and ``kimai_list_timesheets`` tools are exposed.
+The read-only ``kimai_status`` and ``kimai_list_timesheets`` tools are exposed
+next to the preview/log write flow.
 """
 
 from __future__ import annotations
@@ -9,16 +10,22 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+from devecoop_mcp.core.errors import KimaiError
 from devecoop_mcp.kimai.models import (
     KimaiStatusResponse,
     KimaiTimesheetConfigSummary,
+    KimaiTimesheetDraft,
     KimaiTimesheetEntry,
     KimaiTimesheetListResponse,
-    KimaiUserSummary,
+    KimaiTimesheetLogResponse,
+    KimaiTimesheetPreviewResponse,
     KimaiVersionSummary,
+    kimai_user_summary,
 )
+from devecoop_mcp.kimai.timesheets import log_timesheets, preview_timesheets
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import MCPServer
@@ -43,6 +50,16 @@ KIMAI_LIST_TIMESHEETS_DESCRIPTION = (
     "project, activity or description. Read-only."
 )
 
+KIMAI_PREVIEW_TIMESHEETS_DESCRIPTION = (
+    "Validate a batch of timesheets for the configured user and return a "
+    "human-readable confirmation summary plus a signed token. Does not write."
+)
+
+KIMAI_LOG_TIMESHEETS_DESCRIPTION = (
+    "Write the timesheets from a preview token. Only call after the human "
+    "explicitly confirms the exact preview summary."
+)
+
 
 def _current_date(timezone_name: object) -> date:
     """Return today's date in the API user timezone, falling back to local time."""
@@ -52,18 +69,6 @@ def _current_date(timezone_name: object) -> date:
         except (ZoneInfoNotFoundError, ValueError):
             pass
     return date.today()
-
-
-def _user_summary(payload: dict[str, Any]) -> KimaiUserSummary:
-    """Map a Kimai user entity to the tool output model."""
-    return KimaiUserSummary(
-        id=int(payload["id"]),
-        username=str(payload["username"]),
-        alias=payload.get("alias"),
-        timezone=payload.get("timezone"),
-        enabled=payload.get("enabled"),
-        roles=payload.get("roles") or [],
-    )
 
 
 def _timesheet_config_summary(payload: dict[str, Any]) -> KimaiTimesheetConfigSummary:
@@ -136,7 +141,7 @@ def list_own_timesheets(
     )
     entries = [_timesheet_entry(entry) for entry in payload]
     return KimaiTimesheetListResponse(
-        user=_user_summary(default_user_payload),
+        user=kimai_user_summary(default_user_payload),
         from_date=effective_from.isoformat(),
         to_date=effective_to.isoformat(),
         entries=entries,
@@ -158,23 +163,26 @@ def register_tools(mcp: MCPServer, client: KimaiClient, config: KimaiConfig) -> 
     @mcp.tool(annotations=TOOL_ANNOTATIONS, description=KIMAI_STATUS_DESCRIPTION)
     def kimai_status() -> KimaiStatusResponse:
         """Report the configured Kimai instance status."""
-        version_payload = client.get_version()
-        api_user_payload = client.get_current_user()
-        timesheet_payload = client.get_timesheet_config()
-        default_user_payload = client.resolve_user(config.default_user)
+        try:
+            version_payload = client.get_version()
+            api_user_payload = client.get_current_user()
+            timesheet_payload = client.get_timesheet_config()
+            default_user_payload = client.resolve_user(config.default_user)
 
-        return KimaiStatusResponse(
-            base_url=config.base_url,
-            version=KimaiVersionSummary(
-                version=str(version_payload["version"]),
-                semver=version_payload.get("semver"),
-                name=version_payload.get("name"),
-            ),
-            api_user=_user_summary(api_user_payload),
-            default_user=_user_summary(default_user_payload),
-            timesheet_config=_timesheet_config_summary(timesheet_payload),
-            default_begin_time=config.default_begin_time,
-        )
+            return KimaiStatusResponse(
+                base_url=config.base_url,
+                version=KimaiVersionSummary(
+                    version=str(version_payload["version"]),
+                    semver=version_payload.get("semver"),
+                    name=version_payload.get("name"),
+                ),
+                api_user=kimai_user_summary(api_user_payload),
+                default_user=kimai_user_summary(default_user_payload),
+                timesheet_config=_timesheet_config_summary(timesheet_payload),
+                default_begin_time=config.default_begin_time,
+            )
+        except (KimaiError, ValueError) as error:
+            raise ToolError(str(error)) from error
 
     @mcp.tool(
         annotations=TOOL_ANNOTATIONS,
@@ -189,13 +197,54 @@ def register_tools(mcp: MCPServer, client: KimaiClient, config: KimaiConfig) -> 
         limit: int = 100,
     ) -> KimaiTimesheetListResponse:
         """List the configured user's own timesheets."""
-        return list_own_timesheets(
-            client,
-            config,
-            from_date=from_date,
-            to_date=to_date,
-            project=project,
-            activity=activity,
-            term=term,
-            limit=limit,
-        )
+        try:
+            return list_own_timesheets(
+                client,
+                config,
+                from_date=from_date,
+                to_date=to_date,
+                project=project,
+                activity=activity,
+                term=term,
+                limit=limit,
+            )
+        except (KimaiError, ValueError) as error:
+            raise ToolError(str(error)) from error
+
+    @mcp.tool(
+        annotations=TOOL_ANNOTATIONS,
+        description=KIMAI_PREVIEW_TIMESHEETS_DESCRIPTION,
+    )
+    def kimai_preview_timesheets(
+        project: str,
+        activity: str,
+        entries: list[KimaiTimesheetDraft],
+        description: str | None = None,
+    ) -> KimaiTimesheetPreviewResponse:
+        """Preview a batch of timesheets without writing."""
+        try:
+            return preview_timesheets(
+                client,
+                config,
+                project,
+                activity,
+                entries,
+                description=description,
+            )
+        except (KimaiError, ValueError) as error:
+            raise ToolError(str(error)) from error
+
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            idempotent_hint=False,
+            open_world_hint=True,
+        ),
+        description=KIMAI_LOG_TIMESHEETS_DESCRIPTION,
+    )
+    def kimai_log_timesheets(confirmation_token: str) -> KimaiTimesheetLogResponse:
+        """Write timesheets from a confirmed preview."""
+        try:
+            return log_timesheets(client, config, confirmation_token)
+        except (KimaiError, ValueError) as error:
+            raise ToolError(str(error)) from error

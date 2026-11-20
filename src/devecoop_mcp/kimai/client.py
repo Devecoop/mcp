@@ -47,12 +47,13 @@ def _resolve_named_entity(
     *,
     noun: str,
     plural: str,
+    get_entity: Callable[[int], dict[str, Any]],
     list_entities: Callable[[str], list[dict[str, Any]]],
     detail_key: str,
 ) -> dict[str, Any]:
     """Resolve a numeric ID or an exact, case-insensitive entity name."""
     if value.isdigit():
-        return {"id": int(value)}
+        return get_entity(int(value))
 
     normalized = value.casefold()
     entities = list_entities(value)
@@ -160,8 +161,12 @@ class KimaiClient:
             ),
         )
 
+    def get_project(self, project_id: int) -> dict[str, Any]:
+        """Return a single project entity by numeric ID."""
+        return cast(dict[str, Any], self._request("GET", f"/projects/{project_id}"))
+
     def resolve_project(self, value: str) -> dict[str, Any]:
-        """Resolve a project name or numeric ID to a Kimai project reference.
+        """Resolve a project name or numeric ID to a Kimai project entity.
 
         Raises:
             KimaiError: If no project matches or the value is ambiguous.
@@ -170,6 +175,7 @@ class KimaiClient:
             value,
             noun="project",
             plural="projects",
+            get_entity=self.get_project,
             list_entities=self.list_projects,
             detail_key="parentTitle",
         )
@@ -181,8 +187,12 @@ class KimaiClient:
             self._request("GET", "/activities", params={"visible": 1, "term": term}),
         )
 
+    def get_activity(self, activity_id: int) -> dict[str, Any]:
+        """Return a single activity entity by numeric ID."""
+        return cast(dict[str, Any], self._request("GET", f"/activities/{activity_id}"))
+
     def resolve_activity(self, value: str) -> dict[str, Any]:
-        """Resolve an activity name or numeric ID to a Kimai activity reference.
+        """Resolve an activity name or numeric ID to a Kimai activity entity.
 
         Raises:
             KimaiError: If no activity matches or the value is ambiguous.
@@ -191,6 +201,7 @@ class KimaiClient:
             value,
             noun="activity",
             plural="activities",
+            get_entity=self.get_activity,
             list_entities=self.list_activities,
             detail_key="parentTitle",
         )
@@ -225,6 +236,18 @@ class KimaiClient:
         return cast(
             list[dict[str, Any]],
             self._request("GET", "/timesheets", params=params),
+        )
+
+    def create_timesheet(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Create a timesheet and return the created entry."""
+        return cast(
+            dict[str, Any],
+            self._request(
+                "POST",
+                "/timesheets",
+                params={"full": "true"},
+                json_body=payload,
+            ),
         )
 
     def _request(

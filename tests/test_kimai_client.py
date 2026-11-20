@@ -221,39 +221,48 @@ def test_resolve_project_matches_exact_name_and_numeric_id() -> None:
 
     def fake_transport(request: urllib.request.Request, timeout: float) -> tuple[int, bytes]:
         requests.append(request)
+        path = urllib.parse.urlsplit(request.full_url).path
+        if path == "/api/projects/3":
+            return 200, json.dumps(PROJECT_PAYLOAD).encode("utf-8")
         return 200, json.dumps([PROJECT_PAYLOAD]).encode("utf-8")
 
     client = KimaiClient(_make_config(), transport=fake_transport)
 
     assert client.resolve_project("INTERNAL TOOLS")["id"] == 3
-    assert client.resolve_project("3") == {"id": 3}
+    assert client.resolve_project("3") == PROJECT_PAYLOAD
 
-    url = urllib.parse.urlsplit(requests[0].full_url)
-    assert url.path == "/api/projects"
-    assert urllib.parse.parse_qs(url.query) == {
+    list_url = urllib.parse.urlsplit(requests[0].full_url)
+    assert list_url.path == "/api/projects"
+    assert urllib.parse.parse_qs(list_url.query) == {
         "visible": ["1"],
         "ignoreDates": ["1"],
         "term": ["INTERNAL TOOLS"],
     }
+    assert urllib.parse.urlsplit(requests[1].full_url).path == "/api/projects/3"
 
 
-def test_resolve_activity_matches_exact_name() -> None:
+def test_resolve_activity_matches_exact_name_and_numeric_id() -> None:
     requests: list[urllib.request.Request] = []
 
     def fake_transport(request: urllib.request.Request, timeout: float) -> tuple[int, bytes]:
         requests.append(request)
+        path = urllib.parse.urlsplit(request.full_url).path
+        if path == "/api/activities/5":
+            return 200, json.dumps(ACTIVITY_PAYLOAD).encode("utf-8")
         return 200, json.dumps([ACTIVITY_PAYLOAD]).encode("utf-8")
 
     client = KimaiClient(_make_config(), transport=fake_transport)
 
     assert client.resolve_activity("development")["id"] == 5
+    assert client.resolve_activity("5") == ACTIVITY_PAYLOAD
 
-    url = urllib.parse.urlsplit(requests[0].full_url)
-    assert url.path == "/api/activities"
-    assert urllib.parse.parse_qs(url.query) == {
+    list_url = urllib.parse.urlsplit(requests[0].full_url)
+    assert list_url.path == "/api/activities"
+    assert urllib.parse.parse_qs(list_url.query) == {
         "visible": ["1"],
         "term": ["development"],
     }
+    assert urllib.parse.urlsplit(requests[1].full_url).path == "/api/activities/5"
 
 
 def test_resolve_project_reports_ambiguous_matches_with_parent_title() -> None:
@@ -310,3 +319,36 @@ def test_resolve_activity_raises_for_unknown_name() -> None:
 
     with pytest.raises(KimaiError, match="No Kimai activity matches"):
         client.resolve_activity("nobody")
+
+
+def test_create_timesheet_posts_json_with_full_flag() -> None:
+    requests: list[urllib.request.Request] = []
+    created_payload = {
+        "id": 99,
+        "begin": "2026-11-19T09:00:00-0300",
+        "end": "2026-11-19T14:00:00-0300",
+        "duration": 18000,
+    }
+
+    def fake_transport(request: urllib.request.Request, timeout: float) -> tuple[int, bytes]:
+        requests.append(request)
+        return 200, json.dumps(created_payload).encode("utf-8")
+
+    client = KimaiClient(_make_config(), transport=fake_transport)
+    request_payload = {
+        "user": 7,
+        "begin": "2026-11-19T09:00:00",
+        "end": "2026-11-19T14:00:00",
+        "project": 3,
+        "activity": 5,
+    }
+
+    created = client.create_timesheet(request_payload)
+
+    assert created == created_payload
+    request = requests[0]
+    assert request.method == "POST"
+    url = urllib.parse.urlsplit(request.full_url)
+    assert url.path == "/api/timesheets"
+    assert urllib.parse.parse_qs(url.query) == {"full": ["true"]}
+    assert json.loads(request.data or b"{}") == request_payload

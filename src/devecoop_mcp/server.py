@@ -27,7 +27,12 @@ KIMAI_INSTRUCTIONS = (
     "Kimai integration is available. The kimai_status tool is read-only and "
     "reports the Kimai version, API user and timesheet configuration. The "
     "kimai_list_timesheets tool is read-only and returns only the entries of "
-    "the configured KIMAI_DEFAULT_USER."
+    "the configured KIMAI_DEFAULT_USER. "
+    "Creating Kimai entries is a write operation. Always call kimai_preview_timesheets first, "
+    "show the complete summary (user, project, activity, dates and hours) to the human, and "
+    "call kimai_log_timesheets only after explicit confirmation. "
+    "Never create projects or activities. Never delete timesheets. Never write for a user "
+    "other than KIMAI_DEFAULT_USER."
 )
 
 
