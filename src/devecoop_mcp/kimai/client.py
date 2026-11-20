@@ -42,6 +42,50 @@ def _parse_error_details(body: bytes) -> object | None:
         return body.decode("utf-8", errors="replace")
 
 
+def _resolve_named_entity(
+    value: str,
+    *,
+    noun: str,
+    plural: str,
+    list_entities: Callable[[str], list[dict[str, Any]]],
+    detail_key: str,
+) -> dict[str, Any]:
+    """Resolve a numeric ID or an exact, case-insensitive entity name."""
+    if value.isdigit():
+        return {"id": int(value)}
+
+    normalized = value.casefold()
+    entities = list_entities(value)
+    matches = [
+        entity for entity in entities if str(entity.get("name", "")).casefold() == normalized
+    ]
+    if not matches:
+        if entities:
+            candidates = ", ".join(
+                f"id={entity.get('id')}, name={entity.get('name')!r}, "
+                f"{detail_key}={entity.get(detail_key)!r}"
+                for entity in entities[:10]
+            )
+            raise KimaiError(
+                f"No exact Kimai {noun} matches {value!r}. Candidates: {candidates}. "
+                f"Use an exact {noun} name or a numeric ID."
+            )
+        raise KimaiError(
+            f"No Kimai {noun} matches {value!r}. Use a numeric {noun} ID or check the {noun} name."
+        )
+    if len(matches) > 1:
+        candidates = ", ".join(
+            f"id={entity.get('id')}, name={entity.get('name')!r}, "
+            f"{detail_key}={entity.get(detail_key)!r}"
+            for entity in matches
+        )
+        raise KimaiError(
+            f"Multiple Kimai {plural} match {value!r}: {candidates}. "
+            f"Use a numeric {noun} ID instead."
+        )
+    return matches[0]
+
+
 class KimaiClient:
     """Minimal Kimai API client for the endpoints used by the tools."""
 
@@ -104,6 +148,84 @@ class KimaiClient:
                 f"Multiple Kimai users match {value!r}: {usernames}. Use a numeric user ID instead."
             )
         return matches[0]
+
+    def list_projects(self, term: str) -> list[dict[str, Any]]:
+        """Return visible projects matching ``term``."""
+        return cast(
+            list[dict[str, Any]],
+            self._request(
+                "GET",
+                "/projects",
+                params={"visible": 1, "ignoreDates": 1, "term": term},
+            ),
+        )
+
+    def resolve_project(self, value: str) -> dict[str, Any]:
+        """Resolve a project name or numeric ID to a Kimai project reference.
+
+        Raises:
+            KimaiError: If no project matches or the value is ambiguous.
+        """
+        return _resolve_named_entity(
+            value,
+            noun="project",
+            plural="projects",
+            list_entities=self.list_projects,
+            detail_key="parentTitle",
+        )
+
+    def list_activities(self, term: str) -> list[dict[str, Any]]:
+        """Return visible activities matching ``term``."""
+        return cast(
+            list[dict[str, Any]],
+            self._request("GET", "/activities", params={"visible": 1, "term": term}),
+        )
+
+    def resolve_activity(self, value: str) -> dict[str, Any]:
+        """Resolve an activity name or numeric ID to a Kimai activity reference.
+
+        Raises:
+            KimaiError: If no activity matches or the value is ambiguous.
+        """
+        return _resolve_named_entity(
+            value,
+            noun="activity",
+            plural="activities",
+            list_entities=self.list_activities,
+            detail_key="parentTitle",
+        )
+
+    def list_timesheets(
+        self,
+        user_id: int,
+        begin: str,
+        end: str,
+        *,
+        project_id: int | None = None,
+        activity_id: int | None = None,
+        term: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return timesheets for ``user_id`` in the given date range."""
+        params: dict[str, str | int] = {
+            "user": user_id,
+            "begin": begin,
+            "end": end,
+            "size": limit,
+            "orderBy": "begin",
+            "order": "ASC",
+            "full": "true",
+        }
+        if project_id is not None:
+            params["projects"] = project_id
+        if activity_id is not None:
+            params["activities"] = activity_id
+        if term is not None:
+            params["term"] = term
+        return cast(
+            list[dict[str, Any]],
+            self._request("GET", "/timesheets", params=params),
+        )
 
     def _request(
         self,

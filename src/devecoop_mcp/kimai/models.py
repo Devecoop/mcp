@@ -59,3 +59,34 @@ class KimaiStatusResponse(BaseModel):
         description="Timesheet configuration of the Kimai instance."
     )
     default_begin_time: str = Field(description="Configured default begin time for new timesheets.")
+
+
+class KimaiTimesheetEntry(BaseModel):
+    """A single Kimai timesheet entry."""
+
+    id: int = Field(description="Kimai internal timesheet ID.")
+    begin: str = Field(description="Begin timestamp as returned by Kimai, including its offset.")
+    end: str | None = Field(
+        default=None,
+        description="End timestamp as returned by Kimai, or null while the entry is running.",
+    )
+    duration_minutes: int = Field(description="Duration in minutes, rounded from API seconds.")
+    project_id: int = Field(description="Kimai project ID.")
+    project_name: str = Field(description="Kimai project name.")
+    activity_id: int = Field(description="Kimai activity ID.")
+    activity_name: str = Field(description="Kimai activity name.")
+    description: str | None = Field(default=None, description="Timesheet description.")
+
+
+class KimaiTimesheetListResponse(BaseModel):
+    """Result of a ``kimai_list_timesheets`` call."""
+
+    user: KimaiUserSummary = Field(description="Configured target user.")
+    from_date: str = Field(description="Effective start date in YYYY-MM-DD format.")
+    to_date: str = Field(description="Effective end date in YYYY-MM-DD format.")
+    entries: list[KimaiTimesheetEntry] = Field(description="Matching timesheet entries.")
+    count: int = Field(description="Number of returned entries.")
+    total_duration_minutes: int = Field(
+        description="Sum of the returned entry durations in minutes."
+    )
+    truncated: bool = Field(description="Whether the result reached the requested limit.")

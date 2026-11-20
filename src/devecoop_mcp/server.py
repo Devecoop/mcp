@@ -26,7 +26,8 @@ WIKI_INSTRUCTIONS = (
 KIMAI_INSTRUCTIONS = (
     "Kimai integration is available. The kimai_status tool is read-only and "
     "reports the Kimai version, API user and timesheet configuration. The "
-    "server is configured to act for the user in KIMAI_DEFAULT_USER."
+    "kimai_list_timesheets tool is read-only and returns only the entries of "
+    "the configured KIMAI_DEFAULT_USER."
 )
 
 
